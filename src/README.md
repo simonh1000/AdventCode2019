@@ -1,0 +1,1 @@
+elm make Q1.elm --output=q1.js && node index.js
