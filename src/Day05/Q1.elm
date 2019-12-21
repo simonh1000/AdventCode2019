@@ -1,7 +1,6 @@
 port module Day05.Q1 exposing (..)
 
 import Array exposing (Array)
-import Basics.Extra exposing (flip)
 import Common.CoreHelpers exposing (ifThenElse)
 import Json.Encode as Encode exposing (Value)
 
@@ -21,7 +20,7 @@ type Step
 
 type alias State =
     { input : Int
-    , ptr : Maybe Int
+    , ptr : Int
     , arr : Array Int
     }
 
@@ -29,7 +28,7 @@ type alias State =
 {-| required to pass 1 as input
 -}
 initState =
-    State 1 (Just 0) Array.empty
+    State 1 0 Array.empty
 
 
 type PMode
@@ -80,30 +79,29 @@ doStep : State -> Step
 doStep state =
     let
         mbInstruction =
-            state.ptr
-                |> Maybe.andThen (flip Array.get state.arr)
+            Array.get state.ptr state.arr
                 |> Maybe.map analyseInstruction
 
         --_ =
         --    Debug.log "doStep" state
     in
-    case ( state.ptr, mbInstruction ) of
-        ( Just ptr_, Just ins ) ->
+    case mbInstruction of
+        Just ins ->
             case ins.op of
                 99 ->
                     Stop state.arr
 
                 1 ->
-                    doSum ptr_ ins state
+                    doSum ins state
 
                 2 ->
-                    doMultiply ptr_ ins state
+                    doMultiply ins state
 
                 3 ->
-                    doReadInput ptr_ ins state
+                    doReadInput ins state
 
                 4 ->
-                    doOutput ptr_ ins state
+                    doOutput ins state
 
                 _ ->
                     Error ("doStep 1 " ++ Debug.toString ins ++ "__" ++ Debug.toString state)
@@ -112,67 +110,67 @@ doStep state =
             Error ("doStep 2 " ++ Debug.toString state)
 
 
-doSum : Int -> Instruction -> State -> Step
-doSum ptr ins state =
+doSum : Instruction -> State -> Step
+doSum ins state =
     let
         mbFirst =
-            getAt ins.first (ptr + 1) state.arr
+            getAt ins.first (state.ptr + 1) state.arr
 
         mbSecond =
-            getAt ins.second (ptr + 2) state.arr
+            getAt ins.second (state.ptr + 2) state.arr
 
         mbThird =
-            Array.get (ptr + 3) state.arr
+            Array.get (state.ptr + 3) state.arr
 
         --_ =
         --    Debug.log "Summing" ( ins, ( mbFirst, mbSecond, mbThird ) )
     in
     Maybe.map3 (\v1 v2 dst -> Array.set dst (v1 + v2) state.arr) mbFirst mbSecond mbThird
-        |> Maybe.map (\arr_ -> Continue { state | ptr = Just <| ptr + 4, arr = arr_ })
+        |> Maybe.map (\arr_ -> Continue { state | ptr = state.ptr + 4, arr = arr_ })
         |> Maybe.withDefault (Error "doSum")
 
 
-doMultiply : Int -> Instruction -> State -> Step
-doMultiply ptr ins state =
+doMultiply : Instruction -> State -> Step
+doMultiply ins state =
     let
         mbFirst =
-            getAt ins.first (ptr + 1) state.arr
+            getAt ins.first (state.ptr + 1) state.arr
 
         mbSecond =
-            getAt ins.second (ptr + 2) state.arr
+            getAt ins.second (state.ptr + 2) state.arr
 
         mbThird =
-            Array.get (ptr + 3) state.arr
+            Array.get (state.ptr + 3) state.arr
 
         --_ =
         --    Debug.log "Multiplying" ( ins, ( mbFirst, mbSecond, mbThird ) )
     in
     Maybe.map3 (\v1 v2 dst -> Array.set dst (v1 * v2) state.arr) mbFirst mbSecond mbThird
-        |> Maybe.map (\arr_ -> Continue { state | ptr = Just <| ptr + 4, arr = arr_ })
+        |> Maybe.map (\arr_ -> Continue { state | ptr = state.ptr + 4, arr = arr_ })
         |> Maybe.withDefault (Error "doMultiply")
 
 
-doReadInput : Int -> Instruction -> State -> Step
-doReadInput ptr ins state =
+doReadInput : Instruction -> State -> Step
+doReadInput ins state =
     let
         mbDst =
-            Array.get (ptr + 1) state.arr
+            Array.get (state.ptr + 1) state.arr
 
         --_ =
         --    Debug.log ("Insert input " ++ String.fromInt state.input) mbDst
     in
     Maybe.map (\dst -> Array.set dst state.input state.arr) mbDst
-        |> Maybe.map (\arr_ -> Continue { state | ptr = Just <| ptr + 2, arr = arr_ })
+        |> Maybe.map (\arr_ -> Continue { state | ptr = state.ptr + 2, arr = arr_ })
         |> Maybe.withDefault (Error "doReadInput")
 
 
-doOutput : Int -> Instruction -> State -> Step
-doOutput ptr ins state =
+doOutput : Instruction -> State -> Step
+doOutput ins state =
     let
         _ =
-            Debug.log "output" (getAt ins.first (ptr + 1) state.arr)
+            Debug.log "output" (getAt ins.first (state.ptr + 1) state.arr)
     in
-    Continue { state | ptr = Just <| ptr + 2 }
+    Continue { state | ptr = state.ptr + 2 }
 
 
 
