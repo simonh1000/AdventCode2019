@@ -1,4 +1,4 @@
-port module Day05.Q1 exposing (..)
+port module Day05.Q2 exposing (..)
 
 import Array exposing (Array)
 import Basics.Extra exposing (flip)

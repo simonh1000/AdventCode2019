@@ -8,8 +8,8 @@ const q5 =
 p1 = `1002,4,3,4,33`
 p2 = `3,0,4,0,99`
 
-const {Elm} = require("./q1.compiled.js");
+const {Elm} = require("./q2.compiled.js");
 
-const app = Elm.Day05.Q1.init({ flags: q5 });
+const app = Elm.Day05.Q2.init({ flags: q5 });
 app.ports.toJs.subscribe(data => console.log(data));
 
