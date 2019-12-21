@@ -1,7 +1,6 @@
 port module Day05.Q2 exposing (..)
 
 import Array exposing (Array)
-import Common.CoreHelpers exposing (ifThenElse)
 import Intcode exposing (..)
 import Json.Encode as Encode exposing (Value)
 
@@ -31,18 +30,14 @@ init flags =
 
 looper : Step -> Value
 looper step =
-    case step of
-        Continue state ->
-            doStep state
-                |> looper
-
-        Stop array ->
+    case runCode step of
+        Ok array ->
             array
                 |> Array.get 0
                 |> Maybe.map Encode.int
                 |> Maybe.withDefault (Encode.string "Stop")
 
-        Error err ->
+        Err err ->
             Encode.string <| "Error: " ++ err
 
 

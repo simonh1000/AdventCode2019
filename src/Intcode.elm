@@ -10,12 +10,13 @@ import Common.CoreHelpers exposing (ifThenElse)
 
 type Step
     = Continue State
-    | Stop (Array Int)
+    | Stop State
     | Error String
 
 
 type alias State =
-    { input : List Int
+    { input : List Int -- input values provided
+    , output : Maybe Int -- last output
     , ptr : Int
     , arr : Array Int
     }
@@ -26,6 +27,7 @@ type alias State =
 initState : State
 initState =
     { input = []
+    , output = Nothing
     , ptr = 0
     , arr = Array.empty
     }
@@ -44,6 +46,35 @@ type alias Instruction =
     }
 
 
+mkInitState : String -> State
+mkInitState str =
+    { initState | arr = processInput str }
+
+
+processInput : String -> Array Int
+processInput =
+    String.split ","
+        >> List.filterMap String.toInt
+        >> Array.fromList
+
+
+
+--
+
+
+runCode : Step -> Result String State
+runCode step =
+    case step of
+        Continue state ->
+            doStep state |> runCode
+
+        Stop array ->
+            Ok array
+
+        Error err ->
+            Err err
+
+
 doStep : State -> Step
 doStep state =
     let
@@ -58,7 +89,7 @@ doStep state =
         Just ins ->
             case ins.op of
                 99 ->
-                    Stop state.arr
+                    Stop state
 
                 1 ->
                     doSum ins state
@@ -153,10 +184,13 @@ doReadInput ins state =
 doOutput : Instruction -> State -> Step
 doOutput ins state =
     let
-        _ =
-            Debug.log "output" (getAt ins.first (state.ptr + 1) state.arr)
+        output =
+            getAt ins.first (state.ptr + 1) state.arr
+
+        --_ =
+        --    Debug.log "output" output
     in
-    Continue { state | ptr = state.ptr + 2 }
+    Continue { state | ptr = state.ptr + 2, output = output }
 
 
 jumpTrue : Instruction -> State -> Step
@@ -261,13 +295,6 @@ pp state =
                     String.fromInt v
             )
         |> String.join ","
-
-
-processInput : String -> Array Int
-processInput =
-    String.split ","
-        >> List.filterMap String.toInt
-        >> Array.fromList
 
 
 getAt : PMode -> Int -> Array Int -> Maybe Int
