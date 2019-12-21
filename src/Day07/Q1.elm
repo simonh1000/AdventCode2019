@@ -49,7 +49,7 @@ tryPermutation state ints =
         go phase mbAcc =
             case mbAcc of
                 Ok acc ->
-                    Continue { state | input = [ phase, acc ] }
+                    { state | input = [ phase, acc ] }
                         |> runCode
                         |> Result.andThen (.output >> Result.fromMaybe "No Output")
 

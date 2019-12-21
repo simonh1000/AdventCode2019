@@ -1,7 +1,21 @@
-module Intcode exposing (..)
+module Intcode exposing (State, mkInitState, runCode)
 
 import Array exposing (Array)
 import Common.CoreHelpers exposing (ifThenElse)
+
+
+
+-- API
+
+
+mkInitState : String -> State
+mkInitState str =
+    { initState | arr = processInput str }
+
+
+runCode : State -> Result String State
+runCode =
+    Continue >> runCodeInner
 
 
 
@@ -46,11 +60,6 @@ type alias Instruction =
     }
 
 
-mkInitState : String -> State
-mkInitState str =
-    { initState | arr = processInput str }
-
-
 processInput : String -> Array Int
 processInput =
     String.split ","
@@ -62,11 +71,11 @@ processInput =
 --
 
 
-runCode : Step -> Result String State
-runCode step =
+runCodeInner : Step -> Result String State
+runCodeInner step =
     case step of
         Continue state ->
-            doStep state |> runCode
+            doStep state |> runCodeInner
 
         Stop array ->
             Ok array
