@@ -72,10 +72,17 @@ runCodeInner : ProgState -> ProgState
 runCodeInner step =
     case step of
         Running state ->
-            state
-                |> doStep
-                |> runCodeInner
+            let
+                tmp =
+                    doStep state
+            in
+            runCodeInner tmp
 
+        --Running state ->
+        --    state
+        --        |> doStep
+        --        |> runCodeInner
+        --
         _ ->
             step
 
@@ -88,7 +95,7 @@ doStep state =
                 |> analyseInstruction
 
         --_ =
-        --    Debug.log "doStep" <| pp state
+        --    Debug.log "doStep" <| pp2 state
         --
         --_ =
         --    Debug.log "instruction" <| ppInstruction instruction
@@ -228,10 +235,18 @@ lessThan ins state =
     let
         handler first second third =
             if first < second then
-                Running { state | ptr = state.ptr + 4, arr = setA third 1 state.arr }
+                Running
+                    { state
+                        | ptr = state.ptr + 4
+                        , arr = setA third 1 state.arr
+                    }
 
             else
-                Running { state | ptr = state.ptr + 4, arr = setA third 0 state.arr }
+                Running
+                    { state
+                        | ptr = state.ptr + 4
+                        , arr = setA third 0 state.arr
+                    }
     in
     process3 handler ins state
 
@@ -270,16 +285,18 @@ setRelativeBase ins state =
     handler (getAt ins.first (state.ptr + 1) state)
 
 
+{-| first and second are NOT writes
+-}
 process2 : (Int -> Int -> ProgState) -> Instruction -> State -> ProgState
 process2 handler ins state =
     let
-        mbFirst =
+        first =
             getAt ins.first (state.ptr + 1) state
 
-        mbSecond =
+        second =
             getAt ins.second (state.ptr + 2) state
     in
-    handler mbFirst mbSecond
+    handler first second
 
 
 process3 : (Int -> Int -> Int -> ProgState) -> Instruction -> State -> ProgState
@@ -309,8 +326,8 @@ process3 handler ins state =
 type alias Instruction =
     { op : Int
     , first : PMode
-    , second : PMode
-    , third : PMode
+    , second : PMode -- not always used
+    , third : PMode -- not always used
     }
 
 
@@ -395,20 +412,6 @@ getWritePtr pMode int state =
 
         Rel ->
             state.relBase + getA int state.arr
-
-
-
---getAtLiteral : PMode -> Int -> State -> Int
---getAtLiteral pMode int state =
---    case pMode of
---        Pos ->
---            getA int state.arr
---
---        Imm ->
---            int
---
---        Rel ->
---            getA (state.relBase + int) state.arr
 
 
 toPMode : Int -> PMode
@@ -507,6 +510,11 @@ isHalted progState =
 
         _ ->
             False
+
+
+pp2 : State -> String
+pp2 state =
+    "State length: " ++ String.fromInt (Array.length state.arr) ++ ", relBase=" ++ String.fromInt state.relBase ++ ", ptr=" ++ String.fromInt state.ptr
 
 
 pp : State -> String

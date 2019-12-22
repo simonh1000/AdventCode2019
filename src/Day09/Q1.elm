@@ -16,7 +16,7 @@ init flags =
     ( ()
     , flags
         |> mkInitState
-        |> setInput [ 1 ]
+        |> setInput [ 2 ]
         |> runCode
         |> (\_ -> Encode.string "Done")
         |> toJs
