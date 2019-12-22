@@ -1,6 +1,6 @@
 port module Day07.Q1 exposing (..)
 
-import Intcode exposing (..)
+import Day07.Intcode exposing (..)
 import Json.Encode as Encode exposing (Value)
 import List as L
 import List.Extra as LE
@@ -51,7 +51,8 @@ tryPermutation state ints =
                 Ok acc ->
                     { state | input = [ phase, acc ] }
                         |> runCode
-                        |> Result.andThen (.output >> Result.fromMaybe "No Output")
+                        |> getOutput
+                        |> Result.fromMaybe "No Output"
 
                 err ->
                     err

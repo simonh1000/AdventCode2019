@@ -1,8 +1,6 @@
 port module Day06.Q2 exposing (..)
 
-import Array exposing (Array)
 import Basics.Extra exposing (flip)
-import Common.CoreHelpers exposing (ifThenElse)
 import Dict exposing (Dict)
 import Json.Encode as Encode exposing (Value)
 

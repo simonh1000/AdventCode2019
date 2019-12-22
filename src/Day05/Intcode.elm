@@ -1,7 +1,7 @@
-module Intcode exposing (State, mkInitState, runCode)
+module Intcode exposing (..)
 
 import Array exposing (Array)
-import Common.CoreHelpers exposing (ifThenElse)
+import Common.CoreHelpers exposing (debugWithFn, ifThenElse)
 
 
 
@@ -13,19 +13,77 @@ mkInitState str =
     { initState | arr = processInput str }
 
 
-runCode : State -> Result String State
+runCode : State -> ProgState
 runCode =
-    Continue >> runCodeInner
+    Running >> runCodeInner
 
 
+runCode2 : State -> Result String State
+runCode2 state =
+    case runCodeInner <| Running state of
+        Running s ->
+            Ok s
 
--- Modelling
+        Halted s ->
+            Ok s
+
+        EndedWithoutHalting _ ->
+            Err "ended without halting"
+
+        Error err ->
+            Err err
 
 
-type Step
-    = Continue State
-    | Stop State
+type ProgState
+    = Running State
+    | EndedWithoutHalting State
+    | Halted State
     | Error String
+
+
+ppProgState : ProgState -> String
+ppProgState progState =
+    case progState of
+        Running state ->
+            "Running"
+
+        EndedWithoutHalting state ->
+            "EndedWithoutHalting"
+
+        Halted state ->
+            "Halted"
+
+        Error string ->
+            string
+
+
+getState : ProgState -> Result String State
+getState progState =
+    case progState of
+        Running state ->
+            Ok state
+
+        EndedWithoutHalting state ->
+            Ok state
+
+        Halted state ->
+            Ok state
+
+        Error string ->
+            Err string
+
+
+isRunning : ProgState -> Bool
+isRunning progState =
+    case progState of
+        Running _ ->
+            True
+
+        EndedWithoutHalting _ ->
+            True
+
+        _ ->
+            False
 
 
 type alias State =
@@ -45,6 +103,10 @@ initState =
     , ptr = 0
     , arr = Array.empty
     }
+
+
+
+-- Modelling
 
 
 type PMode
@@ -71,20 +133,20 @@ processInput =
 --
 
 
-runCodeInner : Step -> Result String State
+runCodeInner : ProgState -> ProgState
 runCodeInner step =
     case step of
-        Continue state ->
-            doStep state |> runCodeInner
+        Running state ->
+            state
+                |> debugWithFn pp
+                |> doStep
+                |> runCodeInner
 
-        Stop array ->
-            Ok array
-
-        Error err ->
-            Err err
+        _ ->
+            step
 
 
-doStep : State -> Step
+doStep : State -> ProgState
 doStep state =
     let
         mbInstruction =
@@ -98,7 +160,7 @@ doStep state =
         Just ins ->
             case ins.op of
                 99 ->
-                    Stop state
+                    Halted state
 
                 1 ->
                     doSum ins state
@@ -128,10 +190,10 @@ doStep state =
                     Error ("doStep 1 " ++ Debug.toString ins ++ "__" ++ Debug.toString state)
 
         _ ->
-            Error ("doStep 2 " ++ Debug.toString state)
+            EndedWithoutHalting state
 
 
-doSum : Instruction -> State -> Step
+doSum : Instruction -> State -> ProgState
 doSum ins state =
     let
         mbFirst =
@@ -147,11 +209,11 @@ doSum ins state =
         --    Debug.log "Summing" ( ins, ( mbFirst, mbSecond, mbThird ) )
     in
     Maybe.map3 (\v1 v2 dst -> Array.set dst (v1 + v2) state.arr) mbFirst mbSecond mbThird
-        |> Maybe.map (\arr_ -> Continue { state | ptr = state.ptr + 4, arr = arr_ })
+        |> Maybe.map (\arr_ -> Running { state | ptr = state.ptr + 4, arr = arr_ })
         |> Maybe.withDefault (Error "doSum")
 
 
-doMultiply : Instruction -> State -> Step
+doMultiply : Instruction -> State -> ProgState
 doMultiply ins state =
     let
         mbFirst =
@@ -167,11 +229,11 @@ doMultiply ins state =
         --    Debug.log "Multiplying" ( ins, ( mbFirst, mbSecond, mbThird ) )
     in
     Maybe.map3 (\v1 v2 dst -> Array.set dst (v1 * v2) state.arr) mbFirst mbSecond mbThird
-        |> Maybe.map (\arr_ -> Continue { state | ptr = state.ptr + 4, arr = arr_ })
+        |> Maybe.map (\arr_ -> Running { state | ptr = state.ptr + 4, arr = arr_ })
         |> Maybe.withDefault (Error "doMultiply")
 
 
-doReadInput : Instruction -> State -> Step
+doReadInput : Instruction -> State -> ProgState
 doReadInput ins state =
     let
         mbDst =
@@ -183,14 +245,14 @@ doReadInput ins state =
     case state.input of
         hd :: tl ->
             Maybe.map (\dst -> Array.set dst hd state.arr) mbDst
-                |> Maybe.map (\arr_ -> Continue { state | ptr = state.ptr + 2, arr = arr_, input = tl })
+                |> Maybe.map (\arr_ -> Running { state | ptr = state.ptr + 2, arr = arr_, input = tl })
                 |> Maybe.withDefault (Error "doReadInput")
 
         [] ->
             Error "doReadInput: no input left"
 
 
-doOutput : Instruction -> State -> Step
+doOutput : Instruction -> State -> ProgState
 doOutput ins state =
     let
         output =
@@ -199,62 +261,66 @@ doOutput ins state =
         --_ =
         --    Debug.log "output" output
     in
-    Continue { state | ptr = state.ptr + 2, output = output }
+    Running { state | ptr = state.ptr + 2, output = output }
 
 
-jumpTrue : Instruction -> State -> Step
+{-| Opcode 5 is jump-if-true: if the first parameter is non-zero,
+it sets the instruction pointer to the value from the second parameter.
+Otherwise, it does nothing
+-}
+jumpTrue : Instruction -> State -> ProgState
 jumpTrue ins state =
     let
         handler first second =
-            if first == 0 then
-                Continue { state | ptr = state.ptr + 3 }
+            if first /= 0 then
+                Running { state | ptr = second }
 
             else
-                Continue { state | ptr = second }
+                Running { state | ptr = state.ptr + 3 }
     in
     process2 handler "jumpTrue" ins state
 
 
-jumpFalse : Instruction -> State -> Step
+jumpFalse : Instruction -> State -> ProgState
 jumpFalse ins state =
     let
         handler first second =
             if first == 0 then
-                Continue { state | ptr = second }
+                Running { state | ptr = second }
 
             else
-                Continue { state | ptr = state.ptr + 3 }
+                Running { state | ptr = state.ptr + 3 }
     in
     process2 handler "jumpFalse" ins state
 
 
-lessThan : Instruction -> State -> Step
+lessThan : Instruction -> State -> ProgState
 lessThan ins state =
     let
         handler first second third =
             if first < second then
-                Continue { state | ptr = state.ptr + 4, arr = Array.set third 1 state.arr }
+                Running { state | ptr = state.ptr + 4, arr = Array.set third 1 state.arr }
 
             else
-                Continue { state | ptr = state.ptr + 4, arr = Array.set third 0 state.arr }
+                Running { state | ptr = state.ptr + 4, arr = Array.set third 0 state.arr }
     in
     process3 handler "jumpTrue" ins state
 
 
-equals : Instruction -> State -> Step
+equals : Instruction -> State -> ProgState
 equals ins state =
     let
         handler first second third =
             if first == second then
-                Continue { state | ptr = state.ptr + 4, arr = Array.set third 1 state.arr }
+                Running { state | ptr = state.ptr + 4, arr = Array.set third 1 state.arr }
 
             else
-                Continue { state | ptr = state.ptr + 4, arr = Array.set third 0 state.arr }
+                Running { state | ptr = state.ptr + 4, arr = Array.set third 0 state.arr }
     in
     process3 handler "equals" ins state
 
 
-process2 : (Int -> Int -> Step) -> String -> Instruction -> State -> Step
+process2 : (Int -> Int -> ProgState) -> String -> Instruction -> State -> ProgState
 process2 handler def ins state =
     let
         mbFirst =
@@ -267,7 +333,7 @@ process2 handler def ins state =
         |> Maybe.withDefault (Error def)
 
 
-process3 : (Int -> Int -> Int -> Step) -> String -> Instruction -> State -> Step
+process3 : (Int -> Int -> Int -> ProgState) -> String -> Instruction -> State -> ProgState
 process3 handler def ins state =
     let
         mbFirst =
@@ -304,6 +370,7 @@ pp state =
                     String.fromInt v
             )
         |> String.join ","
+        |> (++) ("inputs = " ++ Debug.toString state.input)
 
 
 getAt : PMode -> Int -> Array Int -> Maybe Int
