@@ -1,5 +1,6 @@
 module Common.CoreHelpers exposing (..)
 
+import Array exposing (Array)
 import Json.Decode as Decode exposing (Decoder)
 
 
@@ -10,6 +11,15 @@ ifThenElse cond yes no =
 
     else
         no
+
+
+arrayIndexedFoldl : (Int -> a -> b -> b) -> b -> Array a -> b
+arrayIndexedFoldl fn b array =
+    let
+        go a ( ct, acc ) =
+            ( ct + 1, fn ct a acc )
+    in
+    Array.foldl go ( 0, b ) array |> Tuple.second
 
 
 debugALittle : a -> a
