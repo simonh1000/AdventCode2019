@@ -72,17 +72,9 @@ runCodeInner : ProgState -> ProgState
 runCodeInner step =
     case step of
         Running state ->
-            let
-                tmp =
-                    doStep state
-            in
-            runCodeInner tmp
+            -- don't use <| as it's not tail recursive
+            runCodeInner (doStep state)
 
-        --Running state ->
-        --    state
-        --        |> doStep
-        --        |> runCodeInner
-        --
         _ ->
             step
 
