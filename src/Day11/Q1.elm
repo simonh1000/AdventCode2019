@@ -1,6 +1,6 @@
 port module Day11.Q1 exposing (..)
 
-import Common.CoreHelpers exposing (ifThenElse)
+import Common.CoreHelpers exposing (fromJust, ifThenElse)
 import Day11.Intcode exposing (..)
 import Dict exposing (Dict)
 import Json.Encode as Encode exposing (Value)
@@ -18,11 +18,19 @@ init : Flags -> ( (), Cmd msg )
 init flags =
     ( ()
     , flags
-        |> initState
+        |> initState q2
         |> doIteration
         |> encoder
         |> toJs
     )
+
+
+q1 =
+    Dict.empty
+
+
+q2 =
+    Dict.singleton ( 0, 0 ) White
 
 
 
@@ -38,11 +46,17 @@ pp s =
     let
         ppColor c =
             ifThenElse (c == Black) "." "#"
+
+        ( minX, maxX ) =
+            s |> Dict.keys |> L.map Tuple.first |> (\lst -> ( fromJust <| L.minimum lst, fromJust <| L.maximum lst ))
+
+        ( minY, maxY ) =
+            s |> Dict.keys |> L.map Tuple.second |> (\lst -> ( fromJust <| L.minimum lst, fromJust <| L.maximum lst ))
     in
-    L.range -3 3
+    L.range minX maxX
         |> L.map
             (\x ->
-                L.range -3 3
+                L.range minY maxY
                     |> L.map (\y -> getShipCol s ( x, y ) |> ppColor)
                     |> String.join ""
             )
@@ -99,9 +113,9 @@ type alias Q11State =
     }
 
 
-initState : String -> Q11State
-initState inp =
-    { ship = Dict.empty
+initState : Ship -> String -> Q11State
+initState ship inp =
+    { ship = ship
     , computer = mkInitState inp
     , pos = ( 0, 0 )
     , dir = U
