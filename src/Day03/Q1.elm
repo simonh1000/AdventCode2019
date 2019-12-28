@@ -38,10 +38,6 @@ findNearest ( p1, p2 ) =
         |> L.minimum
 
 
-getPointsForLine =
-    convertLine >> getPointsFromLine
-
-
 getPointsFromLine : List Move -> List Point
 getPointsFromLine moves =
     let

@@ -38,9 +38,6 @@ findNearest ( p1, p2 ) =
             Set.intersect (Set.fromList <| Dict.keys p1) (Set.fromList <| Dict.keys p2)
                 |> Set.toList
 
-        evaluator ( x, y ) =
-            abs x + abs y
-
         evaluator2 p =
             Maybe.map2 (+) (Dict.get p p1) (Dict.get p p2)
     in

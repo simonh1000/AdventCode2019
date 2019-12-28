@@ -1,212 +1,238 @@
 port module Day11.Q1 exposing (..)
 
-import Basics.Extra exposing (flip)
+import Common.CoreHelpers exposing (ifThenElse)
+import Day11.Intcode exposing (..)
 import Dict exposing (Dict)
 import Json.Encode as Encode exposing (Value)
 import List as L
-import Set exposing (Set)
 
 
 port toJs : Value -> Cmd msg
 
 
-init : String -> ( (), Cmd msg )
+type alias Flags =
+    String
+
+
+init : Flags -> ( (), Cmd msg )
 init flags =
     ( ()
-    , let
-        recipes =
-            convert flags
-
-        graphOrder =
-            recipes |> getGraphOrder |> convertOrder
-
-        --1,031,737 , tgt < 10,000,000
-      in
-      findMin recipes graphOrder 1750000
-        |> Encode.int
+    , flags
+        |> initState
+        |> doIteration
+        |> encoder
         |> toJs
     )
 
 
-type alias Recipe =
-    { yield : Int
-    , ingredients : List ( Int, String )
-    , total : Int
+
+--
+
+
+type alias Ship =
+    Dict ( Int, Int ) Colour
+
+
+pp : Ship -> String
+pp s =
+    let
+        ppColor c =
+            ifThenElse (c == Black) "." "#"
+    in
+    L.range -3 3
+        |> L.map
+            (\x ->
+                L.range -3 3
+                    |> L.map (\y -> getShipCol s ( x, y ) |> ppColor)
+                    |> String.join ""
+            )
+        |> String.join "\n"
+
+
+getShipCol ship pos =
+    Dict.get pos ship |> Maybe.withDefault Black
+
+
+type Colour
+    = Black
+    | White
+
+
+type Direction
+    = U
+    | D
+    | L
+    | R
+
+
+{-| provide 0 if the robot is over a black panel or 1 if the robot is over a white panel
+-}
+c2i : Colour -> number
+c2i c =
+    case c of
+        Black ->
+            0
+
+        White ->
+            1
+
+
+i2c : Int -> Colour
+i2c int =
+    case int of
+        0 ->
+            Black
+
+        1 ->
+            White
+
+        _ ->
+            Debug.todo "bad int to i2c"
+
+
+type alias Q11State =
+    { ship : Ship
+    , computer : State
+    , pos : ( Int, Int )
+    , dir : Direction
+    , changes : Int
     }
 
 
-ore =
-    1000000000000
+initState : String -> Q11State
+initState inp =
+    { ship = Dict.empty
+    , computer = mkInitState inp
+    , pos = ( 0, 0 )
+    , dir = U
+    , changes = 0
+    }
 
 
-findMin : Dict String Recipe -> List String -> Int -> Int
-findMin recipes graphOrder fuelTotal =
+right : Direction -> Direction
+right d =
+    case d of
+        U ->
+            R
+
+        D ->
+            L
+
+        L ->
+            U
+
+        R ->
+            D
+
+
+left : Direction -> Direction
+left d =
+    case d of
+        U ->
+            L
+
+        D ->
+            R
+
+        L ->
+            D
+
+        R ->
+            U
+
+
+move : Direction -> ( Int, Int ) -> ( Int, Int )
+move direction ( x, y ) =
+    case direction of
+        U ->
+            ( x, y + 1 )
+
+        D ->
+            ( x, y - 1 )
+
+        L ->
+            ( x - 1, y )
+
+        R ->
+            ( x + 1, y )
+
+
+
+--
+
+
+doIteration : Q11State -> Q11State
+doIteration qstate =
     let
-        _ =
-            Debug.log "trying: " fuelTotal
+        currCol =
+            Dict.get qstate.pos qstate.ship |> Maybe.withDefault Black
+
+        computer =
+            setInput [ c2i currCol ] qstate.computer
     in
-    case handler fuelTotal graphOrder recipes |> (\res -> res > ore) of
-        True ->
-            fuelTotal - 1
-
-        _ ->
-            findMin recipes graphOrder (fuelTotal + 1)
-
-
-handler : Int -> List String -> Dict String Recipe -> Int
-handler fuelTotal graphOrder recipes =
-    reduce fuelTotal graphOrder recipes
-        |> Dict.get "ORE"
-        |> Maybe.map .total
-        |> Maybe.withDefault 0
-
-
-
--- part 3 - reducing
-
-
-reduce : Int -> List String -> Dict String Recipe -> Dict String Recipe
-reduce fuelTotal strings dict =
-    dict
-        |> Dict.insert "ORE" (Recipe 0 [] 0)
-        |> Dict.update "FUEL" (Maybe.map <| \r -> { r | total = fuelTotal })
-        |> (\d -> L.foldl reduce1 d strings)
-
-
-reduce1 : String -> Dict String Recipe -> Dict String Recipe
-reduce1 tgt recipes =
-    case Dict.get tgt recipes of
-        Just { yield, ingredients, total } ->
+    case get2Outputs computer of
+        Just ( intCol, intDir, computer_ ) ->
             let
-                quants =
-                    ceiling <| toFloat total / toFloat yield
+                newCol =
+                    i2c intCol
+
+                newDir =
+                    -- 0 means it should turn left 90 degrees, and 1 means it should turn right 90 degrees
+                    ifThenElse (intDir == 0) (left qstate.dir) (right qstate.dir)
+
+                changes =
+                    if qstate.pos == ( 0, 0 ) || (newCol == currCol) then
+                        qstate.changes
+
+                    else
+                        qstate.changes + 1
+
+                newState =
+                    { qstate
+                        | computer = computer_
+                        , ship = Dict.insert qstate.pos newCol qstate.ship
+                        , changes = changes
+                        , pos = move newDir qstate.pos
+                        , dir = newDir
+                    }
             in
-            ingredients
-                |> L.map (Tuple.mapFirst ((*) quants))
-                |> L.foldl addIngredients (Dict.remove tgt recipes)
+            doIteration newState
 
         Nothing ->
-            recipes
+            qstate
 
 
-addIngredients : ( Int, String ) -> Dict String Recipe -> Dict String Recipe
-addIngredients ( int, string ) dict =
-    case Dict.get string dict of
-        Just recipe ->
-            Dict.insert string { recipe | total = recipe.total + int } dict
+get2Outputs : State -> Maybe ( Int, Int, State )
+get2Outputs computer =
+    case runCodeInner <| Running computer of
+        HitOutput int1 computer1 ->
+            case runCodeInner <| Running computer1 of
+                HitOutput int2 computer2 ->
+                    Just ( int1, int2, computer2 )
 
-        Nothing ->
-            dict
+                _ ->
+                    Debug.todo "phase 2 did not return a value"
 
+        Halted _ ->
+            Nothing
 
+        Error err ->
+            Debug.todo err
 
--- part 2 - find order
-
-
-convertOrder : Dict String Int -> List String
-convertOrder dict =
-    convertOrderInner dict
-        |> Dict.toList
-        |> L.sortBy Tuple.first
-        |> L.foldl (Tuple.second >> (++)) []
-
-
-convertOrderInner : Dict String Int -> Dict Int (List String)
-convertOrderInner =
-    let
-        go : String -> Int -> Dict Int (List String) -> Dict Int (List String)
-        go string int dict =
-            dict
-                |> Dict.get int
-                |> Maybe.withDefault []
-                |> (::) string
-                |> flip (Dict.insert int) dict
-    in
-    Dict.foldl go Dict.empty
-
-
-getGraphOrder : Dict String Recipe -> Dict String Int
-getGraphOrder recipes =
-    let
-        evalItem : ( Int, String ) -> Dict String Int -> ( Int, Dict String Int )
-        evalItem ( x, item ) acc =
-            if item == "ORE" then
-                ( 0, acc )
-
-            else
-                case Dict.get item acc of
-                    Just v ->
-                        ( v, acc )
-
-                    Nothing ->
-                        case Dict.get item recipes of
-                            Just recipe ->
-                                evalRecipe item recipe acc
-                                    |> evalItem ( x, item )
-
-                            _ ->
-                                ( 0, acc )
-
-        evalRecipe : String -> Recipe -> Dict String Int -> Dict String Int
-        evalRecipe name recipe acc =
-            case Dict.get name acc of
-                Just v ->
-                    -- we already know the rank of this item
-                    acc
-
-                Nothing ->
-                    -- analyse the recipe then
-                    recipe.ingredients
-                        |> L.foldl
-                            (\it ( vs, acc_ ) ->
-                                evalItem it acc_
-                                    |> Tuple.mapFirst (\v -> v :: vs)
-                            )
-                            ( [], acc )
-                        |> Tuple.mapFirst (L.maximum >> Maybe.withDefault 0 >> (+) 1)
-                        |> (\( sum, acc_ ) -> Dict.insert name sum acc_)
-    in
-    Dict.foldl evalRecipe Dict.empty recipes
+        Running state ->
+            Debug.todo "unexpectedly received a running state"
 
 
 
--- part 1
+--
 
 
-convert : String -> Dict String Recipe
-convert string =
-    string
-        |> String.split "\n"
-        |> L.map convertLine
-        |> Dict.fromList
-
-
-convertLine : String -> ( String, Recipe )
-convertLine str =
-    case String.split " => " str of
-        [ ings, yd ] ->
-            let
-                ( yield, nm ) =
-                    splitItem yd
-
-                ingredients =
-                    ings
-                        |> String.split ", "
-                        |> L.map splitItem
-            in
-            ( nm, { yield = yield, ingredients = ingredients, total = 0 } )
-
-        _ ->
-            Debug.todo "convertLine"
-
-
-splitItem str =
-    case String.split " " str of
-        [ num, nm ] ->
-            ( String.toInt num |> Maybe.withDefault 0, nm )
-
-        _ ->
-            Debug.todo "splitItem"
+encoder : Q11State -> Value
+encoder s =
+    [ ( "ship", Encode.string <| pp s.ship )
+    , ( "changes", Encode.int <| Dict.size s.ship )
+    ]
+        |> Encode.object
 
 
 main =

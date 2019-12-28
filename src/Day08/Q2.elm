@@ -1,6 +1,8 @@
 port module Day08.Q2 exposing (..)
 
 import Array exposing (Array)
+import Common.CoreHelpers exposing (convertX)
+import Day08.Q1 exposing (convertX)
 import Json.Encode as Encode exposing (Value)
 import List as L
 import List.Extra as LE
@@ -77,24 +79,6 @@ readLayer f h string =
     else
         readLayer f (h + 1) (String.dropLeft f.w string)
             |> Tuple.mapSecond ((::) (convertX (String.left f.w string)))
-
-
-convertX : String -> String
-convertX =
-    let
-        conv : Char -> String
-        conv i =
-            case i of
-                '0' ->
-                    "  "
-
-                '1' ->
-                    "XX"
-
-                _ ->
-                    "  "
-    in
-    String.toList >> L.map conv >> String.join ""
 
 
 main =
