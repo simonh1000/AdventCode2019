@@ -1,5 +1,6 @@
-p0 = `.###
-      #.##`
+p0 = `.#.
+      ###`
+
 
 
 p1 = `.#..#
@@ -76,8 +77,8 @@ puzzle = `.###.#...#.#.##.#.####..
           ...#######.######...####
           #....#.#.#.####.#.#.#.##`
 
-const {Elm} = require("./q1.compiled.js");
+const {Elm} = require("./q2.compiled.js");
 
-const app = Elm.Day10.Q1.init({ flags: puzzle });
+const app = Elm.Day10.Q2.init({ flags: puzzle });
 app.ports.toJs.subscribe(data => console.log(data));
 

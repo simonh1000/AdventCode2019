@@ -1,10 +1,12 @@
-port module Day10.Q1 exposing (..)
+port module Day10.Q2 exposing (..)
 
 import Arithmetic exposing (gcd)
+import Common.CoreHelpers exposing (ifThenElse)
+import Dict exposing (Dict)
+import Dict.Extra as DE
 import Json.Encode as Encode exposing (Value)
 import List as L
 import List.Extra as LE
-import Set exposing (Set)
 
 
 port toJs : Value -> Cmd msg
@@ -19,60 +21,105 @@ init flags =
     ( ()
     , flags
         |> processInput
-        |> calcRes1
-        |> Maybe.map encoder
-        |> Maybe.withDefault (Encode.string "error")
+        |> calcRes2
+        |> encoder
         |> toJs
     )
+
+
+tgt =
+    ( 20, 18 )
 
 
 
 --
 
 
-calcRes1 : List Point -> Maybe ( Point, Int )
-calcRes1 asteroids =
+calcRes2 asteroids =
+    getVectors asteroids
+        |> Dict.toList
+        |> L.map (Tuple.mapFirst normaliseVector)
+        |> L.sortBy Tuple.first
+        |> L.map Tuple.second
+        |> orderSubLists
+        |> putInOrder
+
+
+putInOrder : List (List ( Int, Int )) -> List ( Int, Int )
+putInOrder lists =
+    if lists == [] then
+        []
+
+    else
+        L.filterMap L.head lists ++ putInOrder (L.filterMap L.tail lists)
+
+
+orderSubLists : List (List ( Int, Int )) -> List (List ( Int, Int ))
+orderSubLists =
     let
-        mapper : Point -> ( Point, Int )
-        mapper point =
-            point
-                |> getVectors asteroids
-                |> reduceVectors
-                |> Set.size
-                |> Tuple.pair point
+        ( tgtX, tgtY ) =
+            tgt
+
+        dst ( x, y ) =
+            (x - tgtX) ^ 2 + (y - tgtY) ^ 2
     in
-    asteroids
-        |> L.map mapper
-        |> L.sortBy (Tuple.second >> (*) -1)
-        |> L.head
+    L.map (L.sortBy dst)
 
 
-getVectors : List Point -> Point -> List ( Int, Int )
-getVectors list ( pX, pY ) =
-    L.map (\( x, y ) -> ( x - pX, y - pY )) list
-
-
-reduceVectors : List ( Int, Int ) -> Set ( Int, Int )
-reduceVectors =
+getVectors : List Point -> Dict ( Int, Int ) (List ( Int, Int ))
+getVectors list =
     let
-        go : ( Int, Int ) -> Set ( Int, Int ) -> Set ( Int, Int )
-        go vec acc =
-            case vec of
+        ( tgtX, tgtY ) =
+            tgt
+
+        insert_ k v acc =
+            case Dict.get k acc of
+                Just vs ->
+                    Dict.insert k (v :: vs) acc
+
+                Nothing ->
+                    Dict.insert k [ v ] acc
+
+        go : ( Int, Int ) -> Dict ( Int, Int ) (List ( Int, Int )) -> Dict ( Int, Int ) (List ( Int, Int ))
+        go (( x, y ) as pt) acc =
+            case ( x - tgtX, tgtY - y ) of
                 ( 0, 0 ) ->
                     acc
 
                 ( 0, vY ) ->
-                    Set.insert ( 0, sign vY ) acc
+                    insert_ ( 0, sign vY ) pt acc
 
                 ( vX, 0 ) ->
-                    Set.insert ( sign vX, 0 ) acc
+                    insert_ ( sign vX, 0 ) pt acc
 
-                _ ->
-                    Set.insert (reduce vec) acc
+                vec ->
+                    insert_ (reduce vec) pt acc
     in
-    L.foldl go Set.empty
+    L.foldl go Dict.empty list
 
 
+normaliseVector : ( Int, Int ) -> Float
+normaliseVector vec =
+    let
+        rads =
+            case vec of
+                ( 0, vY ) ->
+                    ifThenElse (vY > 0) 0 pi
+
+                ( vX, 0 ) ->
+                    ifThenElse (vX > 0) (pi / 2) (3 * pi / 2)
+
+                ( vX, vY ) ->
+                    if vX < 0 then
+                        3 * pi / 2 - atan (toFloat vY / toFloat vX)
+
+                    else
+                        pi / 2 - atan (toFloat vY / toFloat vX)
+    in
+    rads / 2 / pi * 360
+
+
+sign : number -> number
 sign x =
     if x <= 0 then
         -1
@@ -94,13 +141,16 @@ reduce ( x, y ) =
 --
 
 
-encoder : ( Point, Int ) -> Value
-encoder ( ( x, y ), tot ) =
-    [ ( "x", Encode.int x )
-    , ( "y", Encode.int y )
-    , ( "tot", Encode.int tot )
-    ]
-        |> Encode.object
+encoder : List ( Int, Int ) -> Value
+encoder =
+    L.indexedMap (\idx pt -> String.fromInt (idx + 1) ++ Debug.toString pt)
+        >> String.join "\n"
+        >> Encode.string
+
+
+
+--encoder ( x, y ) =
+--    x * 100 + y |> Encode.int
 
 
 type alias Point =
